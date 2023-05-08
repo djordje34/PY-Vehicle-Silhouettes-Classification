@@ -3,10 +3,17 @@ import re
 from os import listdir
 from os.path import exists, isfile, join
 
+import graphviz
+import keras
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import pydot
+import pydotplus
 import seaborn as sns
+import tensorflow as tf
+from keras.models import Sequential
+from tensorflow.keras.utils import plot_model
 
 
 class Preprocessor:
@@ -134,7 +141,7 @@ class Plotter():
             g.figure.savefig("plots/pairgrid.png") 
             
             
-    def count(df:pd.DataFrame):
+    def count(df:pd.DataFrame)->None:
         """Generates plot describing relationship between each dataset size
 
         Args:
@@ -145,8 +152,17 @@ class Plotter():
             plt.title('Classes')
             fig.figure.savefig("plots/countplot.png")
 
+
+    def architecture(model:Sequential)->None:
+        """Generate graphical representation of given model\'s architecture 
+        
+        Args:
+            model (Sequential): Given model
+        """
+        plot_model(model, to_file="plots/architecture.png", show_shapes=True, show_layer_names=True)
+
 def main():
-    pass
+    Plotter.architecture(keras.models.load_model("model"))
 
 if __name__=='__main__':
     main()

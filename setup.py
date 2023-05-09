@@ -12,6 +12,9 @@ from utils import Plotter, Preprocessor
 
 PATH = "data/"
 COMP = "csv/"
+
+MODELS = []
+
 def getData(*args:any)->pd.DataFrame:
     """
     Args:
@@ -37,7 +40,7 @@ def getData(*args:any)->pd.DataFrame:
     Plotter.count(preonehot)
     
     
-def getModel(hp)->tf.keras.Model:
+def getModel(hp:kt.Hyperband)->Sequential:
     
     """
     Args: 
@@ -68,8 +71,11 @@ def getModel(hp)->tf.keras.Model:
                 metrics=['accuracy'])
     
     return model
-def main():
-    
+
+
+def Setup():
+    """Function with complete integration of logic from utility and other classes
+    """
     getData()
     data,valid,test = pd.read_csv(COMP+"train.csv"),pd.read_csv(COMP+"validation.csv"),pd.read_csv(COMP+"test.csv")
     #early_stopping = EarlyStopping()
@@ -83,34 +89,36 @@ def main():
     tuner = kt.Hyperband(getModel,
                      objective='val_accuracy',max_epochs=100,factor=3, directory='dir', project_name='khyperband')
     
-    #model = getModel()
-    stop_early = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=5)
+    stop_early = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=10)
     tuner.search(X_train, y_train, epochs=100,validation_data=(X_val, y_val), callbacks=[stop_early])
-    best_hp=tuner.get_best_hyperparameters()[0]
+    all_hps = tuner.get_best_hyperparameters(num_trials=5)
+    best_hp=all_hps[0]
+    
     h_model = tuner.hypermodel.build(best_hp)
     h_model.fit(X_train, y_train, epochs=100, validation_data=(X_val, y_val))
     
-    predicted = h_model.predict(teX)
-    print(predicted)
-    
     h_model.summary()
     h_eval_dict = h_model.evaluate(teX, teY, return_dict=True)
-    print(h_eval_dict)
-    h_model.save("model")
-    Plotter.architecture(h_model)
+    print(h_eval_dict["accuracy"])
+    scores = pd.DataFrame(best_hp.values,index=[0])
+    scores['score'] = Preprocessor.readJSON(best_hp.values[r"tuner/trial_id"])
+    for hp in all_hps[1:]:
+        if "tuner/trial_id" in hp.values:
+            hp.values['score'] = Preprocessor.readJSON(hp.values[r"tuner/trial_id"])
+            scores=scores.append(hp.values,ignore_index=True)
+            
+    scores=scores[["learning_rate", "num_layers", "tuner/trial_id", "score"]]
+    scores.to_csv("csv/model_scores.csv",index=None)
     
-    """
-    train_model = model.fit(X_train, y_train,
-                  batch_size=16,
-                  epochs=100,
-                  verbose=1,
-                  validation_data=(X_val, y_val))
+    
+    h_model.save("model")
+    
+    Plotter.architecture(h_model)
+    Plotter.graphicalmodel(h_model)
 
-    predicted = model.predict(teX)
-    print(predicted)
-    score = model.evaluate(teX, teY, verbose=0)
-    print('Acc:', score[1])
-    """
+
+def main():
+    Setup()
 
 if __name__=='__main__':
     main()

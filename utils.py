@@ -1,22 +1,22 @@
 import glob
+import json
 import re
-from os import listdir
-from os.path import exists, isfile, join
+from os.path import exists
 
-import graphviz
-import keras
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import pydot
-import pydotplus
 import seaborn as sns
-import tensorflow as tf
+import visualkeras
 from keras.models import Sequential
 from tensorflow.keras.utils import plot_model
 
 
 class Preprocessor:
+    """Static class containing data preprocessing methods for given dataset (Vehicle Silhouette Classification)
+    
+    Could be remodeled and repurposed easily
+    """
     @staticmethod
     def cleaner(path:str,dataPos:int=22,colPos:int=19)->None:
         
@@ -82,9 +82,9 @@ class Preprocessor:
             df.fillna(0 if replacer==0 else df[col].mean(),inplace=True) if df.isna().values.any() else df
         return df
 
-
+    @staticmethod
     def aggregate(folder:str)->list[pd.DataFrame]:
-        """Aggregate multiple Dataframes into three dataframes; training, valdiate, test
+        """Aggregate multiple Dataframes into three dataframes; training, validate, test
 
         Args:
             folder: str
@@ -109,9 +109,28 @@ class Preprocessor:
         test.to_csv(f"{folder}/test.csv",index=None)
         return train,validate,test,df,preonehot
     
-    
+    @staticmethod
+    def readJSON(folder:str)->float:
+        """Read JSON info from trials
+        
+        Args:
+            folder: str
+                Path leading to a folder where JSON trials are stored
+        Returns:
+            float
+                Trial score
+                
+        """
+        
+        with open(f"dir/khyperband/trial_{folder}/trial.json") as json_file:
+            data = json.load(json_file)
+        return round(data['score'],4)
     
 class Plotter():
+    """Static class containing methods for plotting and visualising data from given Vehicle Silhouette dataset.
+    
+    Visualising ANN model needed for task.
+    """
     sns.set(font_scale=0.6)
     @staticmethod
     def correlation(df:pd.DataFrame):
@@ -125,7 +144,7 @@ class Plotter():
             df=df.corr()
             heatmap=sns.heatmap(df, annot=True, fmt=".1g", cmap='coolwarm',linewidth=2).get_figure()
             heatmap.savefig("plots/heatmap.png") 
-
+    @staticmethod
     def pair(df:pd.DataFrame):
         """Analyze given Dataframe columns and plot them against each other, resulting in an image 
         showing how each column pair affects each class
@@ -140,7 +159,7 @@ class Plotter():
             g.add_legend()
             g.figure.savefig("plots/pairgrid.png") 
             
-            
+    @staticmethod     
     def count(df:pd.DataFrame)->None:
         """Generates plot describing relationship between each dataset size
 
@@ -152,7 +171,7 @@ class Plotter():
             plt.title('Classes')
             fig.figure.savefig("plots/countplot.png")
 
-
+    @staticmethod
     def architecture(model:Sequential)->None:
         """Generate graphical representation of given model\'s architecture 
         
@@ -160,9 +179,20 @@ class Plotter():
             model (Sequential): Given model
         """
         plot_model(model, to_file="plots/architecture.png", show_shapes=True, show_layer_names=True)
+        
+    @staticmethod
+    def graphicalmodel(model:Sequential)->None:
+        """Graphically represent each layer of structured ANN
 
+        Args:
+            model (Sequential): Given model
+        """
+        visualkeras.layered_view(model, legend=True,to_file="plots/graphicalmodel.png",spacing=30)
+        
+        
+        
 def main():
-    Plotter.architecture(keras.models.load_model("model"))
+    pass
 
 if __name__=='__main__':
     main()

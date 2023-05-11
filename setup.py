@@ -2,9 +2,11 @@ from os import listdir
 from os.path import isfile, join
 
 import kerastuner as kt
+import numpy as np
 import pandas as pd
 import tensorflow as tf
-from keras.layers import Conv2D, Dense, Dropout, Flatten, MaxPooling2D
+from keras import regularizers
+from keras.layers import Dense, Dropout, Input
 from keras.models import Sequential
 from tensorflow import keras
 
@@ -33,12 +35,13 @@ def getData(*args:any)->pd.DataFrame:
     [Preprocessor.cleaner(f"{PATH+fold}") for fold in datas]
     
     
-    train,validate,test,df,preonehot = Preprocessor.aggregate("csv")
+    X_train,y_train,X_val,y_val,X_test,y_test,preonehot,df = Preprocessor.aggregate("csv")
     
     Plotter.correlation(df)
-    Plotter.pair(df)
+    Plotter.pair(preonehot)
     Plotter.count(preonehot)
     
+    return X_train,y_train,X_val,y_val,X_test,y_test,preonehot,df
     
 def getModel(hp:kt.Hyperband)->Sequential:
     
@@ -48,7 +51,7 @@ def getModel(hp:kt.Hyperband)->Sequential:
     Does:
         Sequential ANN classification w/ relu's for activation in hidden layer
         
-        10 folds cross validation to use (probably)-> 7 train; 1.5 validation; 1.5 test yields optimal results
+        7 train; 1.5 validation; 1.5 test
         
         Classic 4 node output softmax with categorical cross-entropy
     
@@ -57,13 +60,16 @@ def getModel(hp:kt.Hyperband)->Sequential:
     """
     
     model = Sequential()
-    hp_learning_rate = hp.Choice('learning_rate', values=[1e-2, 1e-3, 1e-4])
-    for i in range(1, hp.Int("num_layers", 2, 6)):
+    model.add(Input(shape=(18,)))
+    hp_learning_rate = hp.Choice('learning_rate', values=[1e-1,1e-2, 1e-3, 1e-4])
+    
+    for i in range(1, hp.Int("num_layers", 1, 4)):
             model.add(
-            keras.layers.Dense(
-                units=hp.Int("units_" + str(i), min_value=8, max_value=72, step=4),
-                activation="relu")
+            Dense(
+                units=hp.Int("units_" + str(i), min_value=2, max_value=192, step=1),
+                activation="relu", kernel_regularizer=regularizers.l2(0.01))
             )
+            #model.add(Dropout(hp.Choice(name='dropout'+str(i),values=[0.1,0.2,0.25,0.3])))
             
     model.add(Dense(4, activation='softmax'))
     model.compile(loss='categorical_crossentropy',
@@ -77,17 +83,11 @@ def Setup():
     """Function with complete integration of logic from utility and other classes
     """
     getData()
-    data,valid,test = pd.read_csv(COMP+"train.csv"),pd.read_csv(COMP+"validation.csv"),pd.read_csv(COMP+"test.csv")
+    X_train,y_train,X_val,y_val,X_test,y_test,_,_ = getData()
     #early_stopping = EarlyStopping()
-    X_train = data.iloc[:,0:18].values
-    y_train = data.iloc[:,18:].values
-    X_val = valid.iloc[:,0:18].values
-    y_val = valid.iloc[:,18:].values
-    teX = test.iloc[:,0:18].values
-    teY = test.iloc[:,18:].values
     
     tuner = kt.Hyperband(getModel,
-                     objective='val_accuracy',max_epochs=100,factor=3, directory='dir', project_name='khyperband')
+                     objective='val_accuracy',max_epochs=100,factor=3, directory='dir', project_name='hiperparam_modeli')
     
     stop_early = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=10)
     tuner.search(X_train, y_train, epochs=100,validation_data=(X_val, y_val), callbacks=[stop_early])
@@ -98,7 +98,7 @@ def Setup():
     h_model.fit(X_train, y_train, epochs=100, validation_data=(X_val, y_val))
     
     h_model.summary()
-    h_eval_dict = h_model.evaluate(teX, teY, return_dict=True)
+    h_eval_dict = h_model.evaluate(X_test, y_test, return_dict=True)
     print(h_eval_dict["accuracy"])
     scores = pd.DataFrame(best_hp.values,index=[0])
     scores['score'] = Preprocessor.readJSON(best_hp.values[r"tuner/trial_id"])
@@ -110,7 +110,11 @@ def Setup():
     scores=scores[["learning_rate", "num_layers", "tuner/trial_id", "score"]]
     scores.to_csv("csv/model_scores.csv",index=None)
     
-    
+    pred = h_model.predict(X_test)
+    pd.DataFrame(pred).to_csv("csv/predicted.csv",index=None)
+    y_pred=np.argmax(pred, axis=1)
+    y_test=np.argmax(y_test.to_numpy(), axis=1)
+    Plotter.confusion_matrix(y_pred,y_test)
     h_model.save("model")
     
     Plotter.architecture(h_model)

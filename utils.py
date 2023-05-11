@@ -9,6 +9,9 @@ import pandas as pd
 import seaborn as sns
 import visualkeras
 from keras.models import Sequential
+from sklearn.metrics import ConfusionMatrixDisplay, confusion_matrix
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import MinMaxScaler, StandardScaler
 from tensorflow.keras.utils import plot_model
 
 
@@ -83,7 +86,7 @@ class Preprocessor:
         return df
 
     @staticmethod
-    def aggregate(folder:str)->list[pd.DataFrame]:
+    def aggregate(folder:str,onehot:int=0)->list[pd.DataFrame]:
         """Aggregate multiple Dataframes into three dataframes; training, validate, test
 
         Args:
@@ -94,20 +97,28 @@ class Preprocessor:
                 List of training, validation and test dataframes
         """
         csv_files = glob.glob(folder + "/ve*.csv")
-        print(csv_files)
         df_l = [pd.read_csv(file) for file in csv_files]
-        #print(df_l)
         df = pd.concat(df_l,ignore_index=True)
         preonehot = pd.DataFrame(df)
-        df = Preprocessor.onehot(df)
-        train, validate, test = np.split(df.sample(frac=1, random_state=42), 
-                       [int(.8*len(df)), int(.9*len(df))])
+        if onehot==0:
+            df = Preprocessor.onehot(df)
+        y = df.iloc[:,18:]
+        X = df.iloc[:,:18]
         
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.15, stratify=y, random_state=42)
+        X_train, X_val, y_train, y_val = train_test_split(X_train, y_train, test_size=0.15, stratify=y_train, random_state=42)
+        train_df = pd.concat([X_train, y_train], axis=1)
+        val_df = pd.concat([X_val, y_val], axis=1)
+        test_df = pd.concat([X_test, y_test], axis=1)        
+        
+        
+
+        train_df.to_csv("csv/train.csv",index=None)
+        val_df.to_csv("csv/val.csv",index=None)
+        test_df.to_csv("csv/test.csv",index=None)
         df.to_csv(f"{folder}/aggregated.csv",index=None)
-        train.to_csv(f"{folder}/train.csv",index=None)
-        validate.to_csv(f"{folder}/validation.csv",index=None)
-        test.to_csv(f"{folder}/test.csv",index=None)
-        return train,validate,test,df,preonehot
+        
+        return X_train,y_train,X_val,y_val,X_test,y_test,preonehot,df
     
     @staticmethod
     def readJSON(folder:str)->float:
@@ -122,7 +133,7 @@ class Preprocessor:
                 
         """
         
-        with open(f"dir/khyperband/trial_{folder}/trial.json") as json_file:
+        with open(f"dir/hiperparam_modeli/trial_{folder}/trial.json") as json_file:
             data = json.load(json_file)
         return round(data['score'],4)
     
@@ -161,16 +172,49 @@ class Plotter():
             
     @staticmethod     
     def count(df:pd.DataFrame)->None:
-        """Generates plot describing relationship between each dataset size
+        """Generates plot describing relationship between each dataset class size
 
         Args:
             df (pd.DataFrame): aggregated pre-onehot dataset
         """
+        
+        train, validate, test=pd.read_csv("csv/train.csv"),pd.read_csv("csv/val.csv"),pd.read_csv("csv/test.csv")
+        train['Class'] = (train.iloc[:, 18:] == 1).idxmax(1)
+        validate['Class'] = (validate.iloc[:, 18:] == 1).idxmax(1)
+        test['Class'] = (test.iloc[:, 18:] == 1).idxmax(1)
+        print(train.columns)
+        train.drop(columns=[' bus ', ' opel', ' saab', ' van '])
+        validate.drop(columns=[' bus ', ' opel', ' saab', ' van '])
+        test.drop(columns=[' bus ', ' opel', ' saab', ' van '])
         if not exists("plots/countplot.png"):
             fig = sns.countplot(x = 'Class', hue = 'Class', data = df, palette = 'magma')
-            plt.title('Classes')
+            plt.title('Klase')
             fig.figure.savefig("plots/countplot.png")
-
+            plt.close()
+            plt.cla()
+            plt.clf()
+        if not exists("plots/countplottrain.png"):
+            fig = sns.countplot(x = 'Class', hue = 'Class', data = train, palette = 'magma')
+            plt.title('Klase')
+            fig.figure.savefig("plots/countplottrain.png")
+            plt.close()
+            plt.cla()
+            plt.clf()            
+        if not exists("plots/countplotvalidate.png"):
+            fig = sns.countplot(x = 'Class', hue = 'Class', data = validate, palette = 'magma')
+            plt.title('Klase')
+            fig.figure.savefig("plots/countplotvalidate.png")   
+            plt.close()
+            plt.cla()
+            plt.clf()            
+        if not exists("plots/countplottest.png"):
+            fig = sns.countplot(x = 'Class', hue = 'Class', data = test, palette = 'magma')
+            plt.title('Klase')
+            fig.figure.savefig("plots/countplottest.png")  
+            plt.close()
+            plt.cla()
+            plt.clf()
+                             
     @staticmethod
     def architecture(model:Sequential)->None:
         """Generate graphical representation of given model\'s architecture 
@@ -189,7 +233,12 @@ class Plotter():
         """
         visualkeras.layered_view(model, legend=True,to_file="plots/graphicalmodel.png",spacing=30)
         
-        
+    @staticmethod
+    def confusion_matrix(pred,act):
+        cm = confusion_matrix(act, pred)
+        cm_display = ConfusionMatrixDisplay(confusion_matrix = cm)
+        cm_display.plot()
+        plt.savefig("plots/confusionmatrix.png")
         
 def main():
     pass

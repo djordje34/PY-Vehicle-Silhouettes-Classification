@@ -25,8 +25,8 @@ for k in k_values:
     scores.append(np.mean(score))
 
 sns.lineplot(x = k_values, y = scores, marker = 'o')
-plt.xlabel("K Values")
-plt.ylabel("Accuracy Score")
+plt.xlabel("K vrednost")
+plt.ylabel("Tacnost")
 plt.show()
 best_index = np.argmax(scores)
 best_k = k_values[best_index]

@@ -240,6 +240,18 @@ class Plotter():
         cm_display.plot()
         plt.savefig("plots/confusionmatrix.png")
         
+        
+    @staticmethod 
+    def accuracy(history):
+        plt.plot(history.history['accuracy'])
+        plt.plot(history.history['val_accuracy'])
+        plt.title('Preciznost modela')
+        plt.ylabel('Preciznost')
+        plt.xlabel('Epoha')
+        plt.legend(['trening', 'validacija'], loc='upper right')
+        plt.savefig("plots/accuracy.png")
+
+        
 def main():
     pass
 
